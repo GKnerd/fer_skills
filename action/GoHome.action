@@ -1,0 +1,7 @@
+# Goal: drive the arm to the SRDF "ready" pose.
+# No parameters — the skill picks up the named state from the SRDF.
+---
+bool success
+string message
+---
+string status

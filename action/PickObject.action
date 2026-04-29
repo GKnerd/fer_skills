@@ -1,0 +1,13 @@
+# Goal: top-down pick at a Cartesian point.
+# The TCP descends from approach_height above the object, closes the gripper,
+# then lifts back to the approach pose.
+geometry_msgs/PointStamped object_position
+float32 approach_height 0.10
+float32 grasp_width 0.04
+float32 grasp_force 20.0
+---
+bool success
+string message
+---
+string current_phase
+float32 progress

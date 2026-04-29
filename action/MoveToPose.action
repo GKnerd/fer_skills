@@ -1,0 +1,10 @@
+# Goal: move the TCP to a Cartesian pose.
+geometry_msgs/PoseStamped target_pose
+float32 velocity_scaling 0.5
+float32 acceleration_scaling 0.5
+---
+bool success
+string message
+---
+string status
+float32 progress

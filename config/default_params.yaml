@@ -1,0 +1,14 @@
+fer_skill_server:
+  ros__parameters:
+    arm_group: "fer_arm"
+    hand_group: "fer_hand"
+    tcp_frame: "fer_hand_tcp"
+    planning_frame: "base"
+
+    velocity_scaling: 0.5
+    acceleration_scaling: 0.5
+
+    pick:
+      default_approach_height: 0.10
+      default_grasp_width: 0.04
+      default_grasp_force: 20.0
