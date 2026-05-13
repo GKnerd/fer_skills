@@ -1,7 +1,5 @@
 #include "fer_skills/skill_server_node.hpp"
 
-#include <thread>
-
 namespace fer_skills
 {
 
@@ -44,5 +42,4 @@ void SkillServerNode::execute_pick_object(
   result->message = "NOT_IMPLEMENTED";
   goal_handle->abort(result);
 }
-
 }  // namespace fer_skills

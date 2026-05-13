@@ -1,0 +1,7 @@
+# Action to control the fer gripper (open/close)
+---
+bool success
+string message
+---
+string status
+float32 progress

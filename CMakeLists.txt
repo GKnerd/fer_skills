@@ -17,12 +17,15 @@ find_package(geometry_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(moveit_task_constructor_core REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/GoHome.action"
   "action/MoveToPose.action"
   "action/PickObject.action"
+  "action/PlaceObject.action"
+  "action/ControlGripper.action"
   DEPENDENCIES geometry_msgs action_msgs
 )
 
@@ -34,6 +37,7 @@ set(SKILL_SERVER_DEPS
   action_msgs
   control_msgs
   moveit_ros_planning_interface
+  moveit_task_constructor_core
 )
 
 add_executable(skill_server_node

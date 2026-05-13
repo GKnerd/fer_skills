@@ -1,0 +1,11 @@
+# Goal: top-down place at a Cartesian point.
+# The TCP descends from approach_height above the object, opens the gripper,
+# then lifts back to the approach pose.
+geometry_msgs/PointStamped place_position
+float32 approach_height 0.10
+---
+bool success
+string message
+---
+string current_phase
+float32 progress
