@@ -45,26 +45,28 @@ SkillServerNode::SkillServerNode(
     std::bind(&SkillServerNode::handle_pick_object_cancel, this, _1),
     std::bind(&SkillServerNode::handle_pick_object_accepted, this, _1)
   );
-  
-  place_object_server_ = rclcpp_action::create_server<PlaceObject>(
-    node_,
-    "place_object",
-    std::bind(&SkillServerNode::handle_place_object_goal, this, _1, _2),
-    std::bind(&SkillServerNode::handle_place_object_cancel, this, _1),
-    std::bind(&SkillServerNode::handle_place_object_accepted, this, _1)
-  );
 
-  control_gripper_server_ = rclcpp_action::create_server<ControlGripper>(
-    node_,
-    "control_gripper",
-    std::bind(&SkillServerNode::handle_control_gripper_goal, this, _1, _2),
-    std::bind(&SkillServerNode::handle_control_gripper_cancel, this, _1),
-    std::bind(&SkillServerNode::handle_control_gripper_accepted, this, _1)
-  );
-  
+  // PlaceObject and ControlGripper servers disabled until their handlers are
+  // implemented. Re-enable along with the matching skill .cpp files.
+  // place_object_server_ = rclcpp_action::create_server<PlaceObject>(
+  //   node_,
+  //   "place_object",
+  //   std::bind(&SkillServerNode::handle_place_object_goal, this, _1, _2),
+  //   std::bind(&SkillServerNode::handle_place_object_cancel, this, _1),
+  //   std::bind(&SkillServerNode::handle_place_object_accepted, this, _1)
+  // );
+  //
+  // control_gripper_server_ = rclcpp_action::create_server<ControlGripper>(
+  //   node_,
+  //   "control_gripper",
+  //   std::bind(&SkillServerNode::handle_control_gripper_goal, this, _1, _2),
+  //   std::bind(&SkillServerNode::handle_control_gripper_cancel, this, _1),
+  //   std::bind(&SkillServerNode::handle_control_gripper_accepted, this, _1)
+  // );
+
   RCLCPP_INFO(
     node_->get_logger(),
-    "fer_skills server ready. Actions: /go_home, /move_to_pose, /pick_object, /place_object, /control_gripper");
+    "fer_skills server ready. Actions: /go_home, /move_to_pose, /pick_object");
 }
 
 }  // namespace fer_skills

@@ -9,7 +9,7 @@
 namespace mtc = moveit::task_constructor;
 
 
-namespace mtc_planners {
+namespace fer_skills {
 
     struct MTCPlanners{
         std::shared_ptr<mtc::solvers::PipelinePlanner> sampling;
@@ -17,4 +17,4 @@ namespace mtc_planners {
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian;
     };
     
-} // namespace mtc planners 
+} // namespace fer_skills
