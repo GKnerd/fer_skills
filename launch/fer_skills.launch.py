@@ -77,6 +77,38 @@ def launch_setup(context, *args, **kwargs):
     kinematics_yaml = load_yaml("panda_moveit_config", "config/kinematics.yaml")
     kinematics = {"robot_description_kinematics": kinematics_yaml}
 
+    # Joint limits (velocity + acceleration) must be on this node's parameter
+    # tree under `robot_description_planning`. MTC's AddTimeOptimalParameterization
+    # adapter reads them from there; without it, every Connect plan fails with
+    # "No acceleration limit was defined for joint <name>".
+    joint_limits_yaml = load_yaml("panda_moveit_config", "config/joint_limits.yaml")
+    joint_limits = {"robot_description_planning": joint_limits_yaml}
+
+    # MTC's PipelinePlanner reads parameters from the LOCAL node's parameter
+    # tree under the pipeline name ("ompl" by default). Without this block,
+    # task_.init() throws "Planning plugin name is empty or not defined in
+    # namespace 'ompl'".
+    ompl_planning_pipeline_config = {
+        "ompl": {
+            "planning_plugins": ["ompl_interface/OMPLPlanner"],
+            "request_adapters": [
+                "default_planning_request_adapters/ResolveConstraintFrames",
+                "default_planning_request_adapters/ValidateWorkspaceBounds",
+                "default_planning_request_adapters/CheckStartStateBounds",
+                "default_planning_request_adapters/CheckStartStateCollision",
+            ],
+            "response_adapters": [
+                "default_planning_response_adapters/AddTimeOptimalParameterization",
+                "default_planning_response_adapters/ValidateSolution",
+                "default_planning_response_adapters/DisplayMotionPath",
+            ],
+            "start_state_max_bounds_error": 0.1,
+        }
+    }
+    ompl_planning_yaml = load_yaml("panda_moveit_config", "config/ompl_planning.yaml")
+    if ompl_planning_yaml:
+        ompl_planning_pipeline_config["ompl"].update(ompl_planning_yaml)
+
     skill_server = Node(
         package="fer_skills",
         executable="skill_server_node",
@@ -89,6 +121,8 @@ def launch_setup(context, *args, **kwargs):
             robot_description,
             robot_description_semantic,
             kinematics,
+            joint_limits,
+            ompl_planning_pipeline_config,
         ],
     )
 

@@ -7,6 +7,10 @@
 #include <thread>
 #include <utility>
 
+#include <moveit/task_constructor/solvers/cartesian_path.h>
+#include <moveit/task_constructor/solvers/joint_interpolation.h>
+#include <moveit/task_constructor/solvers/pipeline_planner.h>
+
 
 namespace fer_skills
 {
@@ -22,6 +26,26 @@ SkillServerNode::SkillServerNode(
 {
   using std::placeholders::_1;
   using std::placeholders::_2;
+
+  // Construct MTC planners once — they load MoveIt plugins on construction.
+  {
+    namespace mtc = moveit::task_constructor;
+    auto planners = std::make_shared<MTCPlanners>();
+    planners->sampling      = std::make_shared<mtc::solvers::PipelinePlanner>(node_);
+    planners->interpolation = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
+    planners->cartesian     = std::make_shared<mtc::solvers::CartesianPath>();
+    planners->cartesian->setMaxVelocityScalingFactor(1.0);
+    planners->cartesian->setMaxAccelerationScalingFactor(1.0);
+    planners->cartesian->setStepSize(0.01);
+    planners_ = std::move(planners);
+  }
+
+  picker_ = std::make_shared<pick_object::PickObject>(
+    node_,
+    arm_->getName(),
+    hand_->getName(),
+    arm_->getEndEffectorLink(),
+    planners_);
 
   go_home_server_ = rclcpp_action::create_server<GoHome>(
     node_,
