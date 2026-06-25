@@ -14,6 +14,7 @@ import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.conditions import IfCondition
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import (
     Command,
@@ -37,6 +38,8 @@ def load_yaml(package_name, file_path):
 
 def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
+    use_rviz = LaunchConfiguration("use_rviz")
+    log_level = LaunchConfiguration("log_level")
     arm_group = LaunchConfiguration("arm_group")
     robot_ip = LaunchConfiguration("robot_ip")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
@@ -45,6 +48,7 @@ def launch_setup(context, *args, **kwargs):
     ee_id = LaunchConfiguration("ee_id")
 
     franka_description_share = get_package_share_directory("franka_description")
+    fer_skills_share = get_package_share_directory("fer_skills")
 
     fer_description = Command([
         PathJoinSubstitution([FindExecutable(name="xacro")]),
@@ -125,13 +129,35 @@ def launch_setup(context, *args, **kwargs):
             ompl_planning_pipeline_config,
         ],
     )
+    # RViz
+    rviz_base = os.path.join(fer_skills_share, 'rviz')
+    rviz_full_config = os.path.join(rviz_base, 'skills_rviz_conf.rviz')
 
-    return [skill_server]
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='fer_skills_rviz2',
+        output='both',
+        arguments=['-d', rviz_full_config,
+                   "--ros-args", "--log-level", log_level],
+        parameters=[
+            {"use_sim_time": use_sim_time},
+            robot_description,
+            robot_description_semantic,
+            ompl_planning_pipeline_config,
+            kinematics,
+        ],
+        condition=IfCondition(use_rviz)
+    )
+
+    return [skill_server, rviz_node]
 
 
 def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         DeclareLaunchArgument("use_sim_time", default_value="true"),
+        DeclareLaunchArgument("use_rviz", default_value="true"),
+        DeclareLaunchArgument("log_level", default_value="warn"),
         DeclareLaunchArgument("arm_group", default_value="fer_arm"),
         DeclareLaunchArgument("robot_ip", default_value=""),
         DeclareLaunchArgument("use_fake_hardware", default_value="false"),
