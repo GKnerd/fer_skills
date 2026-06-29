@@ -45,7 +45,10 @@ add_executable(skill_server_node
   src/skills/go_home.cpp
   src/skills/move_to_pose.cpp
   src/skills/pick_object.cpp
+  src/skills/place_object.cpp
+  src/mtc_common.cpp
   src/mtc_pick_object.cpp
+  src/mtc_place_object.cpp
 )
 
 target_include_directories(skill_server_node PRIVATE

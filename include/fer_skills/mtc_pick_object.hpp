@@ -1,19 +1,15 @@
 #pragma once
 
-#include <cstddef>
-#include <cmath>
 #include <memory>
 #include <string>
-#include <vector>
 
-#include <Eigen/Geometry>
-
-#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/node.hpp>
 
+#include <moveit/robot_model/robot_model.hpp>
 #include <moveit/task_constructor/stage.h>
 #include <moveit/task_constructor/task.h>
 
+#include "fer_skills/mtc_common.hpp"
 #include "fer_skills/mtc_planners.hpp"
 
 
@@ -21,34 +17,12 @@ namespace mtc = moveit::task_constructor;
 
 namespace pick_object {
 
-struct PlanResult {
-    enum class Status { Success, Failed, InitError };
-    Status status = Status::Failed;
-    std::string failed_stage;
-    std::string failure_reason;
-    std::size_t solutions_found = 0;
-};
-
-struct ExecuteResult {
-    enum class Status { Success, NoPlan, ExecutionFailed };
-    Status status = Status::ExecutionFailed;
-    std::string failure_reason;
-    int moveit_error_code = 0;
-};
-
-struct PickConfig {
-    std::string object_id;
-    Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
-    double angle_delta_rad = M_PI / 12;
-    std::string pre_grasp_pose = "open";
-    std::string grasp_pose_name = "close";
-    int max_ik_solutions = 4;
-    double min_ik_solution_distance = 1.0;
-    double connect_timeout_s = 5.0;
-    double lift_min_distance = 0.10;
-    double lift_max_distance = 0.30;
-    geometry_msgs::msg::Vector3Stamped lift_direction;
-};
+// Shared types live in mtc_common (see mtc_common.hpp). Re-export them here so
+// existing `pick_object::PickConfig` / `pick_object::PlanResult` references keep
+// resolving.
+using mtc_common::ExecuteResult;
+using mtc_common::PickConfig;
+using mtc_common::PlanResult;
 
 
 class PickObject
@@ -59,6 +33,7 @@ public:
         std::string arm_group,
         std::string hand_group,
         std::string tcp_frame,
+        moveit::core::RobotModelConstPtr robot_model,
         std::shared_ptr<const fer_skills::MTCPlanners> planners);
 
     rclcpp::Node::SharedPtr node() const { return node_; }
@@ -68,14 +43,6 @@ public:
     void clear_task();
 
 private:
-    std::unique_ptr<mtc::Stage> make_open_hand(const PickConfig& config);
-    std::unique_ptr<mtc::Stage> make_close_hand(const PickConfig& config);
-    std::unique_ptr<mtc::Stage> make_connect(const PickConfig& config);
-    std::unique_ptr<mtc::Stage> make_allow_collision(
-        const PickConfig& config,
-        std::vector<std::string> links_w_collision_geometry);
-    std::unique_ptr<mtc::Stage> make_attach_object(const PickConfig& config);
-    std::unique_ptr<mtc::Stage> make_lift(const PickConfig& config);
     std::unique_ptr<mtc::Stage> make_grasp_pose(
         const PickConfig& config,
         mtc::Stage* current_state_ptr);
@@ -88,4 +55,4 @@ private:
     mtc::Task task_;
 };
 
-} // namespace pick_object
+}  // namespace pick_object

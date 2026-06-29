@@ -1,164 +1,135 @@
 #include "fer_skills/mtc_place_object.hpp"
 
+#include <utility>
+
+#include <rclcpp/logging.hpp>
+
 #include <moveit/task_constructor/container.h>
-#include <moveit/task_constructor/stage.h>
 #include <moveit/task_constructor/stages/compute_ik.h>
-#include <moveit/task_constructor/stages/connect.h>
 #include <moveit/task_constructor/stages/current_state.h>
 #include <moveit/task_constructor/stages/generate_place_pose.h>
-#include <moveit/task_constructor/stages/modify_planning_scene.h>
-#include <moveit/task_constructor/stages/move_relative.h>
-#include <moveit/task_constructor/stages/move_to.h>
-#include <memory>
 
-namespace place_object 
+
+namespace place_object
 {
 
-    PlaceObject::PlaceObject(
-        rclcpp::Node::SharedPtr node,
-        std::string arm_group,
-        std::string hand_group,
-        std::string tcp_frame,
-        std::shared_ptr<const fer_skills::MTCPlanners> planners
-    ):
+PlaceObject::PlaceObject(
+    rclcpp::Node::SharedPtr node,
+    std::string arm_group,
+    std::string hand_group,
+    std::string tcp_frame,
+    moveit::core::RobotModelConstPtr robot_model,
+    std::shared_ptr<const fer_skills::MTCPlanners> planners
+):
     node_{std::move(node)},
-    arm_group_{arm_group},
-    hand_group_{hand_group},
-    tcp_frame_{tcp_frame},
+    arm_group_{std::move(arm_group)},
+    hand_group_{std::move(hand_group)},
+    tcp_frame_{std::move(tcp_frame)},
     planners_{std::move(planners)}
-    {
-        RCLCPP_INFO(node_->get_logger(),
-        "Pick Object Planner initialized with arm group: %.*s, \
-        hand_group: %.*s and tcp planning frame: %.*s", 
-        static_cast<int>(arm_group.size()), arm_group.data(), 
-        static_cast<int>(hand_group.size()), hand_group.data(), 
-        static_cast<int>(tcp_frame.size()), tcp_frame.data()
-        );
+{
+    RCLCPP_INFO(node_->get_logger(),
+        "Place Object Planner initialized with arm group: %s, "
+        "hand group: %s and tcp planning frame: %s",
+        arm_group_.c_str(), hand_group_.c_str(), tcp_frame_.c_str());
 
-        //TODO: Add UUID to the task maybe?
-        task_.stages()->setName("Place Object");
-        task_.loadRobotModel(node_);
-        task_.setProperty("group", arm_group);
-        task_.setProperty("eef", hand_group);
-        task_.setProperty("ik_frame", tcp_frame);
-        
-    }
+    // Share the model instance across pick and place: the PipelinePlanner is
+    // shared and caches the model of the first task that inits it, so both
+    // tasks must use the SAME RobotModel (not separate loadRobotModel calls).
+    task_.setRobotModel(std::move(robot_model));
+    mtc_common::apply_default_properties(
+        task_, "Place Object", arm_group_, hand_group_, tcp_frame_);
+}
 
-    PlanResult PlaceObject::plan_place(const PlaceConfig& config)
-    {
-        PlanResult result;
-        clear_task();
-        
-        auto stage_state_current = std::make_unique<mtc::stages::CurrentState>("current");
-        task_.add(std::move(stage_state_current));
-        task_.add(make_open_hand(config));
+void PlaceObject::clear_task()
+{
+    task_.clear();
+    mtc_common::apply_default_properties(
+        task_, "Place Object", arm_group_, hand_group_, tcp_frame_);
+}
 
-        auto place = std::make_unique<mtc::SerialContainer>("place object");
-        task_.properties().exposeTo(place->properties(), { "eef", "group", "ik_frame"});
-        place->properties().configureInitFrom(mtc::Stage::PARENT,{ "eef", "group", "ik_frame"});
-        
-        auto allow_collision_stage = make_allow_collision(
-            config,
-            task_.getRobotModel()->getJointModelGroup(hand_group_)->getLinkModelNamesWithCollisionGeometry());
-        mtc::Stage* current_state_ptr = allow_collision_stage.get();
+PlanResult PlaceObject::plan_place(const PlaceConfig& config)
+{
+    clear_task();
+    task_.stages()->setName(
+        mtc_common::make_task_name("place_object", config.object_id, config.task_id));
 
-        task_.insert(make_place_pose(config, current_state_ptr));
-        task_.insert(make_move_to_place(config));
-        task_.insert(make_open_hand(config));
-        task_.insert(make_detach_object(config));
+    // CurrentState snapshots the LIVE planning scene. Because pick and place
+    // are separate tasks, we cannot point GeneratePlacePose at the pick task's
+    // attach_object stage. Instead we monitor this CurrentState: after a
+    // successful pick the global PlanningScene already holds the object
+    // attached to the hand, so this stage's scene carries that attachment —
+    // which GeneratePlacePose needs to locate the object and compute the place
+    // IK. We keep a NON-OWNING pointer to it and hand ownership to the task, so
+    // the pointer stays valid for the whole task lifetime (no dangling).
+    auto stage_state_current = std::make_unique<mtc::stages::CurrentState>("current");
+    mtc::Stage* current_state_ptr = stage_state_current.get();
+    task_.add(std::move(stage_state_current));
 
+    // Bridge from wherever the arm currently is to the place pose.
+    task_.add(mtc_common::make_connect(
+        "move to place", {{arm_group_, planners_->sampling}}, config.connect_timeout_s));
 
-        return result;
-    }
+    // Everything from the place pose onward lives in a serial container so the
+    // {eef, group, ik_frame} properties propagate to its children.
+    auto place = std::make_unique<mtc::SerialContainer>("place object");
+    task_.properties().exposeTo(place->properties(), {"eef", "group", "ik_frame"});
+    place->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group", "ik_frame"});
 
-    std::unique_ptr<mtc::Stage> PlaceObject::make_move_to_place(const PlaceConfig& config)
-    {
-        auto stage = std::make_unique<mtc::stages::Connect>(
-            "move to place",
-            mtc::stages::Connect::GroupPlannerVector{ 
-                { arm_group_, planners_->sampling },
-                { hand_group_, planners_->interpolation } 
-            }
-        );
-        stage->setTimeout(config.connect_timeout_s);
-        stage->properties().configureInitFrom(mtc::Stage::PARENT);
-        
-        return stage;
-    }
+    place->insert(make_place_pose(config, current_state_ptr));
+    place->insert(mtc_common::make_move_to_named(
+        "open hand", hand_group_, config.release_pose, planners_->interpolation));
+    // KEEP hand<->object collision allowed through detach + retreat. At the place
+    // pose the palm (fer_hand) still geometrically overlaps the object (same
+    // overlap pick had to allow to grasp). Detaching removes the attachment's
+    // touch-link exemption, so without an explicit allow the residual overlap
+    // would be flagged as a hard collision. The hand only clears the object once
+    // it has retreated.
+    place->insert(mtc_common::make_modify_collisions(
+        "allow collision (hand,object)", config.object_id,
+        mtc_common::hand_collision_links(task_, hand_group_), /*allow=*/true));
+    place->insert(mtc_common::make_attach(
+        "detach object", config.object_id, hand_group_, /*attach=*/false));
+    place->insert(mtc_common::make_relative(
+        "retreat", planners_->cartesian, tcp_frame_, config.retreat_direction,
+        config.retreat_min_distance, config.retreat_max_distance, "retreat"));
+    // Now that the hand has retreated clear of the object, restore normal
+    // collision checking between them so future motions treat it as an obstacle.
+    place->insert(mtc_common::make_modify_collisions(
+        "forbid collision (hand,object)", config.object_id,
+        mtc_common::hand_collision_links(task_, hand_group_), /*allow=*/false));
 
-    
-    std::unique_ptr<mtc::Stage> PlaceObject::make_open_hand(const PlaceConfig& config)
-    {
-        auto stage = std::make_unique<mtc::stages::MoveTo>("open_hand", planners_->interpolation);
-        stage->setGroup(hand_group_);
-        stage->setGoal("open");
-        
-        return stage;
-    }
+    task_.add(std::move(place));
 
-    
-    std::unique_ptr<mtc::Stage> PlaceObject::make_allow_collision(
-        const PlaceConfig& config,
-        std::vector<std::string> links_w_collision_geometry)
-    {
-        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (hand,object)");
-        stage->allowCollisions(config.object_id,
-            links_w_collision_geometry, 
-            false);
-        return stage;
-    }
+    return mtc_common::plan_task(task_, node_->get_logger(), 5, "Place");
+}
 
-  
-    std::unique_ptr<mtc::Stage> PlaceObject::make_detach_object(const PlaceConfig& config)
-    {
-        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("detach_object");
-        stage->detachObject(config.object_id, hand_group_);
-        return stage;
-    }
+ExecuteResult PlaceObject::execute_place()
+{
+    return mtc_common::execute_task(task_, node_->get_logger(), "Place");
+}
 
+std::unique_ptr<mtc::Stage> PlaceObject::make_place_pose(
+    const PlaceConfig& config, mtc::Stage* current_state_ptr)
+{
+    // Sample the placement pose for the object.
+    auto stage = std::make_unique<mtc::stages::GeneratePlacePose>("generate place pose");
+    stage->properties().configureInitFrom(mtc::Stage::PARENT);
+    stage->properties().set("marker_ns", "place_pose");
+    stage->setObject(config.object_id);
+    stage->setPose(config.place_pose);
+    // Monitor the scene that holds the attached object (see plan_place).
+    stage->setMonitoredStage(current_state_ptr);
 
-    std::unique_ptr<mtc::Stage> PlaceObject::make_retreat(const PlaceConfig& config)
-    {
-        auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", planners_->cartesian);
-        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
-        stage->setMinMaxDistance(config.lift_min_distance, config.lift_max_distance);
-        stage->setIKFrame(hand_group_);
-        stage->properties().set("marker_ns", "retreat");
+    // Compute IK with the OBJECT frame as the IK frame, so the object lands
+    // exactly at config.place_pose.
+    auto wrapper =
+        std::make_unique<mtc::stages::ComputeIK>("place pose IK", std::move(stage));
+    wrapper->setMaxIKSolutions(config.max_ik_solutions);
+    wrapper->setMinSolutionDistance(config.min_ik_solution_distance);
+    wrapper->setIKFrame(config.object_id);
+    wrapper->properties().configureInitFrom(mtc::Stage::PARENT, {"eef", "group"});
+    wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
+    return wrapper;
+}
 
-        geometry_msgs::msg::Vector3Stamped vec;
-        vec.header.frame_id = "world";
-        vec.vector.x = -0.5;
-        stage->setDirection(vec);
-
-        return stage;
-    }   
-
-    std::unique_ptr<mtc::Stage> PlaceObject::make_place_pose(const PlaceConfig& config, mtc::Stage* current_state_ptr)
-    {
-        // Sample place pose
-        auto stage = std::make_unique<mtc::stages::GeneratePlacePose>("generate place pose");
-        stage->properties().configureInitFrom(mtc::Stage::PARENT);
-        stage->properties().set("marker_ns", "place_pose");
-        stage->setObject(config.object_id);
-
-        geometry_msgs::msg::PoseStamped target_pose_msg;
-        target_pose_msg.header.frame_id = "object";
-        target_pose_msg.pose.position.y = 0.5;
-        target_pose_msg.pose.orientation.w = 1.0;
-        stage->setPose(target_pose_msg);
-        stage->setMonitoredStage(current_state_ptr);  // Hook into attach_object_stage
-
-        // Compute IK
-        auto wrapper =
-            std::make_unique<mtc::stages::ComputeIK>("place pose IK", std::move(stage));
-        wrapper->setMaxIKSolutions(config.max_ik_solutions);
-        wrapper->setMinSolutionDistance(config.min_ik_solution_distance);
-        wrapper->setIKFrame(config.object_id);
-        wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
-        wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
-        
-        return wrapper;
-    }
-
-
-} //namespace place_object
+}  // namespace place_object

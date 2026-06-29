@@ -58,6 +58,8 @@ void SkillServerNode::execute_pick_object(
   // goal instead.
   pick_object::PickConfig config;
   config.object_id = "cylinder_1";
+  // Tie the MTC task name to this action goal's UUID for end-to-end traceability.
+  config.task_id = rclcpp_action::to_string(goal_handle->get_goal_id());
 
   // ---- DIAGNOSTIC: verify the scene contains what we expect ----
   {

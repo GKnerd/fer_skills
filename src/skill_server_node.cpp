@@ -40,11 +40,25 @@ SkillServerNode::SkillServerNode(
     planners_ = std::move(planners);
   }
 
+  // One RobotModel instance shared by both tasks. The MTC PipelinePlanner is
+  // shared via planners_ and latches onto the model of the first task it inits,
+  // so pick and place must hand it the SAME RobotModel.
+  const auto robot_model = arm_->getRobotModel();
+
   picker_ = std::make_shared<pick_object::PickObject>(
     node_,
     arm_->getName(),
     hand_->getName(),
     arm_->getEndEffectorLink(),
+    robot_model,
+    planners_);
+
+  placer_ = std::make_shared<place_object::PlaceObject>(
+    node_,
+    arm_->getName(),
+    hand_->getName(),
+    arm_->getEndEffectorLink(),
+    robot_model,
     planners_);
 
   go_home_server_ = rclcpp_action::create_server<GoHome>(
@@ -70,16 +84,16 @@ SkillServerNode::SkillServerNode(
     std::bind(&SkillServerNode::handle_pick_object_accepted, this, _1)
   );
 
-  // PlaceObject and ControlGripper servers disabled until their handlers are
-  // implemented. Re-enable along with the matching skill .cpp files.
-  // place_object_server_ = rclcpp_action::create_server<PlaceObject>(
-  //   node_,
-  //   "place_object",
-  //   std::bind(&SkillServerNode::handle_place_object_goal, this, _1, _2),
-  //   std::bind(&SkillServerNode::handle_place_object_cancel, this, _1),
-  //   std::bind(&SkillServerNode::handle_place_object_accepted, this, _1)
-  // );
-  //
+  place_object_server_ = rclcpp_action::create_server<PlaceObject>(
+    node_,
+    "place_object",
+    std::bind(&SkillServerNode::handle_place_object_goal, this, _1, _2),
+    std::bind(&SkillServerNode::handle_place_object_cancel, this, _1),
+    std::bind(&SkillServerNode::handle_place_object_accepted, this, _1)
+  );
+
+  // ControlGripper server disabled until its handlers are implemented.
+  // Re-enable along with the matching skill .cpp file.
   // control_gripper_server_ = rclcpp_action::create_server<ControlGripper>(
   //   node_,
   //   "control_gripper",
@@ -90,7 +104,8 @@ SkillServerNode::SkillServerNode(
 
   RCLCPP_INFO(
     node_->get_logger(),
-    "fer_skills server ready. Actions: /go_home, /move_to_pose, /pick_object");
+    "fer_skills server ready. Actions: /go_home, /move_to_pose, /pick_object, "
+    "/place_object");
 }
 
 }  // namespace fer_skills

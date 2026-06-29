@@ -16,6 +16,7 @@
 #include "fer_skills/action/control_gripper.hpp"
 #include "fer_skills/mtc_planners.hpp"
 #include "fer_skills/mtc_pick_object.hpp"
+#include "fer_skills/mtc_place_object.hpp"
 
 
 namespace fer_skills
@@ -106,6 +107,7 @@ private:
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> hand_;
   std::shared_ptr<const MTCPlanners> planners_;
   std::shared_ptr<pick_object::PickObject> picker_;
+  std::shared_ptr<place_object::PlaceObject> placer_;
 
   // Action Servers
   rclcpp_action::Server<GoHome>::SharedPtr go_home_server_;
