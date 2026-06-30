@@ -32,9 +32,7 @@ PlaceObject::PlaceObject(
         "hand group: %s and tcp planning frame: %s",
         arm_group_.c_str(), hand_group_.c_str(), tcp_frame_.c_str());
 
-    // Share the model instance across pick and place: the PipelinePlanner is
-    // shared and caches the model of the first task that inits it, so both
-    // tasks must use the SAME RobotModel (not separate loadRobotModel calls).
+    // Set the model once; it survives task_.clear() so we never reseed.
     task_.setRobotModel(std::move(robot_model));
     mtc_common::apply_default_properties(
         task_, "Place Object", arm_group_, hand_group_, tcp_frame_);
@@ -50,7 +48,7 @@ void PlaceObject::clear_task()
 PlanResult PlaceObject::plan_place(const PlaceConfig& config)
 {
     clear_task();
-    task_.stages()->setName(
+    task_.setName(
         mtc_common::make_task_name("place_object", config.object_id, config.task_id));
 
     // CurrentState snapshots the LIVE planning scene. Because pick and place
@@ -99,6 +97,11 @@ PlanResult PlaceObject::plan_place(const PlaceConfig& config)
         mtc_common::hand_collision_links(task_, hand_group_), /*allow=*/false));
 
     task_.add(std::move(place));
+
+    // Traceability: ties this plan to the originating action goal (the name
+    // embeds object id + goal UUID). Visible in logs and failure dumps.
+    RCLCPP_INFO(node_->get_logger(),
+                "Planning MTC task named: '%s'", task_.name().c_str());
 
     return mtc_common::plan_task(task_, node_->get_logger(), 5, "Place");
 }

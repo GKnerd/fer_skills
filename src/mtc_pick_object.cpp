@@ -31,10 +31,7 @@ namespace pick_object
             "hand group: %s and tcp planning frame: %s",
             arm_group_.c_str(), hand_group_.c_str(), tcp_frame_.c_str());
 
-        //TODO: Add UUID to the task maybe?
-        // Share the model instance across pick and place: the PipelinePlanner is
-        // shared and caches the model of the first task that inits it, so both
-        // tasks must use the SAME RobotModel (not separate loadRobotModel calls).
+        // Set the model once; it survives task_.clear() so we never reseed.
         task_.setRobotModel(std::move(robot_model));
         mtc_common::apply_default_properties(
             task_, "Pick Object", arm_group_, hand_group_, tcp_frame_);
@@ -50,7 +47,7 @@ namespace pick_object
     PlanResult PickObject::plan_pick(const PickConfig& config)
     {
         clear_task();
-        task_.stages()->setName(
+        task_.setName(
             mtc_common::make_task_name("pick_object", config.object_id, config.task_id));
 
         auto stage_state_current = std::make_unique<mtc::stages::CurrentState>("current");
@@ -88,6 +85,11 @@ namespace pick_object
             config.lift_min_distance, config.lift_max_distance, "lift_object"));
 
         task_.add(std::move(grasp));
+
+        // Traceability: ties this plan to the originating action goal (the name
+        // embeds object id + goal UUID). Visible in logs and failure dumps.
+        RCLCPP_INFO(node_->get_logger(),
+                    "Planning MTC task named: '%s'", task_.name().c_str());
 
         return mtc_common::plan_task(task_, node_->get_logger(), 5, "Pick");
     }

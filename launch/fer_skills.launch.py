@@ -78,14 +78,14 @@ def launch_setup(context, *args, **kwargs):
         )
     }
 
-    kinematics_yaml = load_yaml("panda_moveit_config", "config/kinematics.yaml")
+    kinematics_yaml = load_yaml("fer_moveit_config", "config/kinematics.yaml")
     kinematics = {"robot_description_kinematics": kinematics_yaml}
 
     # Joint limits (velocity + acceleration) must be on this node's parameter
     # tree under `robot_description_planning`. MTC's AddTimeOptimalParameterization
     # adapter reads them from there; without it, every Connect plan fails with
     # "No acceleration limit was defined for joint <name>".
-    joint_limits_yaml = load_yaml("panda_moveit_config", "config/joint_limits.yaml")
+    joint_limits_yaml = load_yaml("fer_moveit_config", "config/joint_limits.yaml")
     joint_limits = {"robot_description_planning": joint_limits_yaml}
 
     # MTC's PipelinePlanner reads parameters from the LOCAL node's parameter
@@ -109,7 +109,7 @@ def launch_setup(context, *args, **kwargs):
             "start_state_max_bounds_error": 0.1,
         }
     }
-    ompl_planning_yaml = load_yaml("panda_moveit_config", "config/ompl_planning.yaml")
+    ompl_planning_yaml = load_yaml("fer_moveit_config", "config/ompl_planning.yaml")
     if ompl_planning_yaml:
         ompl_planning_pipeline_config["ompl"].update(ompl_planning_yaml)
 

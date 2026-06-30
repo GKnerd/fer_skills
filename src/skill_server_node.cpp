@@ -92,8 +92,6 @@ SkillServerNode::SkillServerNode(
     std::bind(&SkillServerNode::handle_place_object_accepted, this, _1)
   );
 
-  // ControlGripper server disabled until its handlers are implemented.
-  // Re-enable along with the matching skill .cpp file.
   // control_gripper_server_ = rclcpp_action::create_server<ControlGripper>(
   //   node_,
   //   "control_gripper",
